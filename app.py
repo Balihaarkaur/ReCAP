@@ -8,6 +8,12 @@ from pathlib import Path
 import time
 import logging
 import streamlit.components.v1 as components
+try:
+    import torch
+    import torch.nn as nn
+except Exception:
+    torch = None
+    nn = None
 
 # ========================================================
 # Configuration
@@ -95,15 +101,146 @@ def generate_heatmap_from_boxes(frame_shape, boxes, radius=40, sigma=25):
     return heat_color
 
 
+def generate_activation_cam(model, frame, boxes=None, target_size=640):
+    """Generate a detection-weighted CAM-like heatmap.
+
+    Strategy:
+    - Run a forward pass through the model and capture the last Conv2d feature map.
+    - If `boxes` are provided (Nx4 array in image coordinates), map them to the
+      feature map spatial dimensions and compute per-channel weights as the mean
+      activation inside each box. Combine channels using those weights (score-CAM
+      style but without extra forward passes) so activations inside detected
+      person boxes contribute more strongly.
+    - If no boxes are given or weights are all zero, fall back to channel-average CAM.
+    - Upsample to original frame size, apply slight blur and a Jet colormap.
+    """
+    if torch is None or nn is None:
+        raise RuntimeError("PyTorch unavailable for CAM generation")
+
+    img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    h, w = img_rgb.shape[:2]
+    img_resized = cv2.resize(img_rgb, (target_size, target_size))
+    img_t = torch.from_numpy(img_resized).permute(2, 0, 1).float() / 255.0
+    img_t = img_t.unsqueeze(0)
+
+    # Find last Conv2d in model
+    module_root = getattr(model, "model", model)
+    target_layer = None
+    for m in module_root.modules():
+        if isinstance(m, nn.Conv2d):
+            target_layer = m
+    if target_layer is None:
+        raise RuntimeError("No Conv2d layer found in model")
+
+    activations = {}
+
+    def forward_hook(module, inp, out):
+        activations['value'] = out.detach().cpu()
+
+    handle = target_layer.register_forward_hook(forward_hook)
+
+    try:
+        # Move input to model device
+        device = next(module_root.parameters()).device if any(True for _ in module_root.parameters()) else torch.device('cpu')
+        img_t = img_t.to(device)
+        # Run forward through module_root (backbone head etc.)
+        try:
+            _ = module_root(img_t)
+        except Exception:
+            # Try calling the top-level model if module_root isn't callable
+            _ = model(img_resized)
+
+        handle.remove()
+
+        if 'value' not in activations:
+            raise RuntimeError("Activation hook did not capture any tensor")
+
+        feat = activations['value'][0]  # C x Hf x Wf (on CPU)
+        C, Hf, Wf = feat.shape
+
+        # If boxes provided, compute channel weights from activations inside mapped boxes
+        weights = None
+        if boxes is not None and len(boxes) > 0:
+            weights = torch.zeros(C, dtype=torch.float32)
+            count_valid = 0
+            for b in boxes:
+                try:
+                    x1, y1, x2, y2 = map(int, b[:4])
+                except Exception:
+                    continue
+                # map box coords from original image (w,h) to feature map (Wf,Hf)
+                fx1 = max(0, int(x1 * Wf / w))
+                fy1 = max(0, int(y1 * Hf / h))
+                fx2 = min(Wf, int(x2 * Wf / w) + 1)
+                fy2 = min(Hf, int(y2 * Hf / h) + 1)
+                if fx2 <= fx1 or fy2 <= fy1:
+                    continue
+                region = feat[:, fy1:fy2, fx1:fx2]
+                if region.numel() == 0:
+                    continue
+                # mean activation per channel inside this box
+                w_k = region.view(C, -1).mean(dim=1)
+                weights += w_k
+                count_valid += 1
+            if count_valid > 0:
+                weights = weights / float(count_valid)
+            else:
+                weights = None
+
+        # Compute CAM: either weighted sum of channels or plain average
+        if weights is not None and weights.sum() > 0:
+            # convert to numpy for processing
+            feat_np = feat.numpy()
+            w_np = weights.numpy()
+            cam_map = np.tensordot(w_np, feat_np, axes=(0, 0))  # Hf x Wf
+        else:
+            cam_map = feat.mean(dim=0).numpy()
+
+        # Normalize
+        cam_map -= cam_map.min()
+        if cam_map.max() > 0:
+            cam_map = cam_map / cam_map.max()
+        cam_uint8 = np.uint8(255 * cam_map)
+        cam_resized = cv2.resize(cam_uint8, (w, h), interpolation=cv2.INTER_LINEAR)
+        # Slight blur to smooth
+        cam_resized = cv2.GaussianBlur(cam_resized, (11, 11), 0)
+        cam_color = cv2.applyColorMap(cam_resized, cv2.COLORMAP_JET)
+        return cam_color
+    finally:
+        try:
+            handle.remove()
+        except Exception:
+            pass
+
+
 # ========================================================
 # Streamlit Interface
 # ========================================================
 
-st.title("🎥 Crowd Monitoring System with YOLOv8 + Heatmap")
-st.write("Upload a video or use webcam to detect crowd level with heatmap overlay.")
+# Use a wide page layout and left-align content so information is spread across the page
+st.set_page_config(page_title="UrbanCrowd Insight", layout="wide")
+
+# Small CSS adjustments to make the app use full width and left-aligned headings
+st.markdown(
+    """
+    <style>
+      .block-container{max-width:100% !important; padding-left:2rem; padding-right:2rem}
+      h1, .stTitle {text-align: left !important}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown("<h1 style='margin:0 0 0.5rem 0'>🎥 UrbanCrowd Insight – Heatmap Based Crowd Analytics</h1>", unsafe_allow_html=True)
+st.markdown("<p style='margin-top:0.25rem;margin-bottom:1rem;'>Upload a video or use webcam to detect crowd level with heatmap overlay.</p>", unsafe_allow_html=True)
 
 # Build a native, functional control panel that mirrors the React UI
-control_col, preview_col = st.columns([1, 2])
+# Spread the UI across three evenly spaced columns so content is not centered
+left_col, center_col, right_col = st.columns([1, 1, 1])
+
+# assign named aliases used later in the code
+control_col = left_col
+preview_col = center_col
 
 with control_col:
     st.subheader("CrowdSense Controls")
@@ -199,7 +336,10 @@ with control_col:
                         except Exception:
                             coords_prev = []
 
-                        heat_prev = generate_heatmap_from_boxes(annotated_prev.shape, coords_prev)
+                        try:
+                            heat_prev = generate_activation_cam(model_preview, annotated_prev, boxes=coords_prev)
+                        except Exception:
+                            heat_prev = generate_heatmap_from_boxes(annotated_prev.shape, coords_prev)
                         annotated_rgb_prev = cv2.cvtColor(annotated_prev, cv2.COLOR_BGR2RGB)
                         heat_rgb_prev = cv2.cvtColor(heat_prev, cv2.COLOR_BGR2RGB)
 
@@ -217,16 +357,23 @@ if "time_history" not in st.session_state:
 
 # Dashboard: use Streamlit native metrics + sparkline and download tools
 with preview_col:
-    # Metrics row (current count, density %, status)
+    # Metrics row (Current Count, Density, Status) with bold headings and larger values
     m1, m2, m3 = st.columns(3)
-    m1.metric("Current Count", value=0, delta=None)
-    m2.metric("Density", value="0%", delta=None)
-    m3.metric("Status", value="Idle")
+
+    # Headings: bold and slightly larger
+    m1.markdown("<div style='font-weight:700; font-size:18px; text-align:left;'>Current Count</div>", unsafe_allow_html=True)
+    m2.markdown("<div style='font-weight:700; font-size:18px; text-align:left;'>Density</div>", unsafe_allow_html=True)
+    m3.markdown("<div style='font-weight:700; font-size:18px; text-align:left;'>Status</div>", unsafe_allow_html=True)
 
     # Placeholders for in-place updates (used by the processing loop)
     count_placeholder = m1.empty()
     density_placeholder = m2.empty()
     status_placeholder = m3.empty()
+
+    # Initialize placeholders as empty large-value areas (will be updated during processing)
+    count_placeholder.markdown("<div style='font-size:36px; font-weight:800; text-align:left;'>&nbsp;</div>", unsafe_allow_html=True)
+    density_placeholder.markdown("<div style='font-size:28px; font-weight:700; text-align:left;'>&nbsp;</div>", unsafe_allow_html=True)
+    status_placeholder.markdown("<div style='font-size:26px; font-weight:700; text-align:left;'>&nbsp;</div>", unsafe_allow_html=True)
 
     # Sparkline / history chart
     st.markdown("**Crowd History**")
@@ -351,10 +498,10 @@ def _process_stream():
             # Update the stat-card placeholders via small JS snippet so they update in-place
             # Update native placeholders (metrics, chart, downloads)
             try:
-                # update metrics if placeholders exist
-                count_placeholder.markdown(f"<div style='font-size:28px;font-weight:700;text-align:center;'>{person_count}</div>", unsafe_allow_html=True)
-                density_placeholder.markdown(f"<div style='font-size:20px;font-weight:700;text-align:center;'>{density_percent}%</div>", unsafe_allow_html=True)
-                status_placeholder.markdown(f"<div style='font-size:18px;font-weight:700;text-align:center;'>{status}</div>", unsafe_allow_html=True)
+                # update metrics if placeholders exist (left-aligned, larger font)
+                count_placeholder.markdown(f"<div style='font-size:40px;font-weight:800;text-align:left;'>{person_count}</div>", unsafe_allow_html=True)
+                density_placeholder.markdown(f"<div style='font-size:28px;font-weight:700;text-align:left;'>{density_percent}%</div>", unsafe_allow_html=True)
+                status_placeholder.markdown(f"<div style='font-size:26px;font-weight:700;text-align:left;'>{status}</div>", unsafe_allow_html=True)
             except Exception:
                 pass
 
@@ -381,7 +528,10 @@ def _process_stream():
             except Exception:
                 coords = []
 
-            heat_color = generate_heatmap_from_boxes(annotated.shape, coords)
+            try:
+                heat_color = generate_activation_cam(model, annotated, boxes=coords)
+            except Exception:
+                heat_color = generate_heatmap_from_boxes(annotated.shape, coords)
 
             # Convert BGR → RGB for Streamlit
             annotated_rgb = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
