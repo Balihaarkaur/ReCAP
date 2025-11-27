@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CrowdSense — Controls</title>
+    <style>
+      :root{
+        --bg: #ffffff;
+        --card: #f8fbff; /* very light blue */
+        --muted: #98a8c9; 
+        --accent: #a8e6cf; /* pastel mint */
+        --accent-2: #ffd3b6; /* pastel peach */
+        --accent-3: #ffaaa5; /* pastel coral */
+        --accent-4: #d7bde2; /* pastel lavender */
+        --glass: rgba(255,255,255,0.7);
+        --radius: 12px;
+      }
+      html,body{background:var(--bg); color:#223; font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;}
+      .container{max-width:980px; margin:14px auto;}
+      .header{display:flex; align-items:center; gap:12px;}
+      .logo{width:56px; height:56px; border-radius:10px; background:linear-gradient(135deg,var(--accent),var(--accent-4)); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700;}
+      h1{margin:0; font-size:20px}
+      p.lead{margin:4px 0 14px 0; color:var(--muted); font-size:13px}
+
+      .panel{display:grid; grid-template-columns:320px 1fr; gap:16px; align-items:start}
+      .card{background:var(--card); border-radius:var(--radius); padding:14px; box-shadow: 0 6px 18px rgba(30,40,60,0.06);}
+
+      .controls .row{margin-bottom:12px}
+      label{display:block; font-size:13px; color:#334; margin-bottom:6px}
+      input[type=range]{width:100%}
+      .btn{display:inline-flex; gap:8px; align-items:center; border:0; padding:10px 14px; border-radius:10px; cursor:pointer; background:linear-gradient(90deg,var(--accent),var(--accent-2)); color:#073; font-weight:600}
+      .btn.ghost{background:transparent; color:#556; border:1px solid rgba(34,40,60,0.06)}
+      .status{padding:8px 10px; border-radius:8px; background:#fff; display:inline-block; box-shadow:inset 0 -2px 0 rgba(0,0,0,0.02)}
+
+      .preview-area{height:360px; display:flex; align-items:center; justify-content:center; border-radius:10px; background:linear-gradient(180deg, rgba(248,251,255,0.6), rgba(255,255,255,0.9)); border:1px dashed rgba(34,40,60,0.06)}
+      .swatches{display:flex; gap:8px; margin-top:8px}
+      .sw{width:34px; height:34px; border-radius:8px; box-shadow:0 2px 6px rgba(20,30,40,0.06)}
+      .small{font-size:12px; color:var(--muted)}
+    </style>
+  </head>
+  <body>
+    <div class="container card">
+      <div class="header">
+        <div class="logo">CS</div>
+        <div>
+          <h1>CrowdSense</h1>
+          <p class="lead">Interactive tuning controls for crowd detection & heatmap preview. Uses client-side UI — detection runs on the server.</p>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:12px">
+        <div class="card controls">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+            <div>
+              <strong>Analysis</strong>
+              <div class="small">Tweak thresholds and preview parameters</div>
+            </div>
+            <div class="status" id="status">Idle</div>
+          </div>
+
+          <div class="row">
+            <label>Start / Stop</label>
+            <div style="display:flex; gap:8px">
+              <button class="btn" id="startBtn">Start</button>
+              <button class="btn ghost" id="stopBtn">Stop</button>
+            </div>
+          </div>
+
+          <div class="row">
+            <label>Density Threshold: <strong id="thVal">5</strong></label>
+            <input id="threshold" type="range" min="1" max="30" value="5" />
+          </div>
+
+          <div class="row">
+            <label>Sensitivity: <strong id="svVal">0.50</strong></label>
+            <input id="sensitivity" type="range" min="0" max="1" step="0.01" value="0.5" />
+          </div>
+
+          <div class="row" style="display:flex; gap:8px; align-items:center">
+            <button class="btn" id="previewBtn">Generate Preview</button>
+            <button class="btn ghost" id="resetBtn">Reset</button>
+          </div>
+
+          <div style="margin-top:8px">
+            <label>Palette</label>
+            <div class="swatches">
+              <div class="sw" style="background:var(--accent)"></div>
+              <div class="sw" style="background:var(--accent-2)"></div>
+              <div class="sw" style="background:var(--accent-3)"></div>
+              <div class="sw" style="background:var(--accent-4)"></div>
+            </div>
+            <div class="small">Pastel palette applied to overlays and UI accents.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="preview-area" id="previewArea">
+            <div style="text-align:center">
+              <svg width="260" height="160" viewBox="0 0 260 160" xmlns="http://www.w3.org/2000/svg">
+                <rect width="100%" height="100%" rx="8" fill="#fff" stroke="#eef3fb" />
+                <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#9aa7c9" font-size="14">Server-side annotated preview will appear here</text>
+              </svg>
+              <div class="small" style="margin-top:10px">Click <strong>Generate Preview</strong> to run detection on the server's preview frame.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel">
+      const { useEffect } = React;
+      // Lightweight DOM wiring (no heavy React state needed for this static embed)
+      useEffect(()=>{
+        const start = document.getElementById('startBtn');
+        const stop = document.getElementById('stopBtn');
+        const preview = document.getElementById('previewBtn');
+        const reset = document.getElementById('resetBtn');
+        const status = document.getElementById('status');
+        const th = document.getElementById('threshold');
+        const sv = document.getElementById('sensitivity');
+        const thVal = document.getElementById('thVal');
+        const svVal = document.getElementById('svVal');
+
+        function setStatus(s){ status.innerText = s }
+
+        start.onclick = ()=> setStatus('Running');
+        stop.onclick = ()=> setStatus('Idle');
+        preview.onclick = ()=> alert('Triggering server preview...\nPlease use the Streamlit "Generate Preview Heatmap" button to run the model on a frame and return results.')
+        reset.onclick = ()=>{ th.value = 5; sv.value = 0.5; thVal.innerText = '5'; svVal.innerText = '0.50'; }
+        th.oninput = ()=> thVal.innerText = th.value;
+        sv.oninput = ()=> svVal.innerText = Number(sv.value).toFixed(2);
+      }, []);
+    </script>
+  </body>
+</html>

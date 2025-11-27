@@ -1,0 +1,26 @@
+
+> streamlit-crowdsense-frontend@0.1.0 start
+> webpack serve --mode development --open --hot --port 3001
+
+C:\Users\sarab\OneDrive\Desktop\Moveewise\streamlit_crowdsense_component\frontend\node_modules\webpack-dev-server\lib\Server.js:2557
+        throw error;
+        ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1872:16)
+    at listenInCluster (node:net:1920:12)
+    at Server.listen (node:net:2008:7)
+    at READ_WRITE (C:\Users\sarab\OneDrive\Desktop\Moveewise\streamlit_crowdsense_component\frontend\node_modules\webpack-dev-server\lib\Server.js:3367:23)
+    at new Promise (<anonymous>)
+    at Server.start (C:\Users\sarab\OneDrive\Desktop\Moveewise\streamlit_crowdsense_component\frontend\node_modules\webpack-dev-server\lib\Server.js:3365:7)
+    at async Command.<anonymous> (C:\Users\sarab\OneDrive\Desktop\Moveewise\streamlit_crowdsense_component\frontend\node_modules\@webpack-cli\serve\lib\index.js:257:25)
+    at async Promise.all (index 1)
+    at async Command.<anonymous> (C:\Users\sarab\OneDrive\Desktop\Moveewise\streamlit_crowdsense_component\frontend\node_modules\webpack-cli\lib\webpack-cli.js:1372:13) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v20.11.0

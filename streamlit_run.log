@@ -1,0 +1,36 @@
+2025-11-16 22:31:47.329 Starting new event loop for server
+2025-11-16 22:31:47.331 Starting server...
+2025-11-16 22:31:47.332 Serving static content from C:\Users\sarab\OneDrive\Desktop\Moveewise\.venv\lib\site-packages\streamlit\static
+2025-11-16 22:31:47.350 Server started on port 8501
+2025-11-16 22:31:47.350 Runtime state: RuntimeState.INITIAL -> RuntimeState.NO_SESSIONS_CONNECTED
+
+  You can now view your Streamlit app in your browser.
+
+  Local URL: http://localhost:8501
+  Network URL: http://192.168.1.12:8501
+  External URL: http://103.212.145.231:8501
+
+2025-11-16 22:31:47.740 Setting up signal handler
+2025-11-16 22:31:47.791 No singleton. Registering one.
+2025-11-16 22:31:47.814 Watcher created for C:\Users\sarab\OneDrive\Desktop\Moveewise\app.py
+2025-11-16 22:31:47.814 AppSession initialized (id=64faa0b6-8a4c-472c-a32e-26edaefac508)
+2025-11-16 22:31:47.815 Created new session for client 2375554649152. Session ID: 64faa0b6-8a4c-472c-a32e-26edaefac508
+2025-11-16 22:31:47.815 Runtime state: RuntimeState.NO_SESSIONS_CONNECTED -> RuntimeState.ONE_OR_MORE_SESSIONS_CONNECTED
+2025-11-16 22:31:47.819 Watcher created for C:\Users\sarab\OneDrive\Desktop\Moveewise\app.py
+2025-11-16 22:31:47.820 AppSession initialized (id=fdf9c3c3-c101-4287-bb69-168a697b1b18)
+2025-11-16 22:31:47.820 Created new session for client 2375555315408. Session ID: fdf9c3c3-c101-4287-bb69-168a697b1b18
+2025-11-16 22:31:47.820 Runtime state: RuntimeState.ONE_OR_MORE_SESSIONS_CONNECTED -> RuntimeState.ONE_OR_MORE_SESSIONS_CONNECTED
+  Stopping...
+2025-11-16 22:32:02.604 Runtime stopping...
+2025-11-16 22:32:02.604 Runtime state: RuntimeState.ONE_OR_MORE_SESSIONS_CONNECTED -> RuntimeState.STOPPING
+2025-11-16 22:32:02.605 Shutting down (id=64faa0b6-8a4c-472c-a32e-26edaefac508)
+2025-11-16 22:32:02.605 Disconnecting files for session with ID 64faa0b6-8a4c-472c-a32e-26edaefac508
+2025-11-16 22:32:02.605 Sessions still active: dict_keys([])
+2025-11-16 22:32:02.605 Files: 0; Sessions with files: 0
+2025-11-16 22:32:02.605 Removing orphaned files...
+2025-11-16 22:32:02.606 Shutting down (id=fdf9c3c3-c101-4287-bb69-168a697b1b18)
+2025-11-16 22:32:02.606 Disconnecting files for session with ID fdf9c3c3-c101-4287-bb69-168a697b1b18
+2025-11-16 22:32:02.606 Sessions still active: dict_keys([])
+2025-11-16 22:32:02.606 Files: 0; Sessions with files: 0
+2025-11-16 22:32:02.606 Removing orphaned files...
+2025-11-16 22:32:02.607 Runtime state: RuntimeState.STOPPING -> RuntimeState.STOPPED
